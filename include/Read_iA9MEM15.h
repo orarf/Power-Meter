@@ -192,6 +192,19 @@ inline void Read_iA9MEM15(const std::vector<int> &ids,
 
     client->Disconnect();
   }
+    /* >>> CLEANUP 7 DAYS <<< */
+  if (db) {
+    const char* sqlCleanup =
+        "DELETE FROM readings "
+        "WHERE timestamp < strftime('%s','now','-7 days');";
+
+    char* err = nullptr;
+    if (sqlite3_exec(db, sqlCleanup, nullptr, nullptr, &err) != SQLITE_OK) {
+      std::cerr << "SQLite cleanup error: " << err << std::endl;
+      sqlite3_free(err);
+    }
+  }
+  /* <<< CLEANUP 7 DAYS <<< */
 
   if (stmtHistory)
     sqlite3_finalize(stmtHistory);
@@ -199,6 +212,7 @@ inline void Read_iA9MEM15(const std::vector<int> &ids,
     sqlite3_finalize(stmtInsert);
   if (db)
     sqlite3_close(db);
+
 }
 
 #endif // READ_IA9MEM15_H

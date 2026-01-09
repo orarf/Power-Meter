@@ -414,7 +414,19 @@ inline void Read_iPM2xxx(const std::vector<int> &ids, const std::string &ipAddr,
                 << std::endl;
     }
   }
+  /* >>> CLEANUP 7 DAYS <<< */
+  if (db) {
+    const char* sqlCleanup =
+        "DELETE FROM readings_pm2xxx "
+        "WHERE timestamp < strftime('%s','now','-7 days');";
 
+    char* err = nullptr;
+    if (sqlite3_exec(db, sqlCleanup, nullptr, nullptr, &err) != SQLITE_OK) {
+      std::cerr << "SQLite cleanup error: " << err << std::endl;
+      sqlite3_free(err);
+    }
+  }
+  /* <<< CLEANUP 7 DAYS <<< */
   if (stmtHistory)
     sqlite3_finalize(stmtHistory);
   if (stmtInsert)

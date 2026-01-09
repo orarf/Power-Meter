@@ -31,6 +31,16 @@ int main(int argc, char *argv[]) {
         static int last_hour = -1;
         bool newHour = (last_hour != -1 && lt->tm_hour != last_hour);
         last_hour = lt->tm_hour;
+
+        static int last_day = -1;
+        bool newDay = (last_day != -1 && lt->tm_mday != last_day);
+        last_day = lt->tm_mday; 
+        
+        static int last_month = -1;
+        bool newMonth = (last_month != -1 && lt->tm_mon != last_month);
+        last_month = lt->tm_mon;
+
+
         Read_iA9MEM15({100,101,102}, "192.168.100.28", 502);
         Read_iPM2xxx({1}, "192.168.100.28", 502);   
         
@@ -151,41 +161,113 @@ int main(int argc, char *argv[]) {
                             std::chrono::system_clock::now().time_since_epoch()).count();
                         
                     tb.sendTelemetry(ts, energyHourdoc);
+
+                     const char* sqlInsert =
+                    "INSERT INTO energy_delta_hourly (timestamp, delta_kwh_hour) "
+                    "VALUES (?, ?);";
+
+                    sqlite3_stmt* stmtIns = nullptr;
+                    sqlite3_prepare_v2(dbPM, sqlInsert, -1, &stmtIns, nullptr);
+
+                    sqlite3_bind_int64(stmtIns, 1, ts / 1000);   // เก็บเป็นวินาที
+                    sqlite3_bind_double(stmtIns, 2, hourly_kwh);
+
+                    sqlite3_step(stmtIns);
+                    sqlite3_finalize(stmtIns);
                         
                     std::cout << "🕐 Hourly energy = "
                               << hourly_kwh << " kWh\n";
                 }
-                if (newHour) {
+
+                if (newDay) {
+                 // 1. รวมค่า kWh ของ "เมื่อวาน"
                 const char* sql =
-                    "SELECT SUM(delta_kwh) "
-                    "FROM energy_delta "
-                    "WHERE strftime('%Y-%m-%d %H', timestamp, 'unixepoch', 'localtime') = "
-                    "strftime('%Y-%m-%d %H', 'now', '-1 hour', 'localtime');";
-                            
+                    "SELECT SUM(delta_kwh_hour) "
+                    "FROM energy_delta_hourly "
+                    "WHERE strftime('%Y-%m-%d', timestamp, 'unixepoch', 'localtime') = "
+                    "strftime('%Y-%m-%d', 'now', '-1 day', 'localtime');";
+
                 sqlite3_stmt* stmt = nullptr;
                 sqlite3_prepare_v2(dbPM, sql, -1, &stmt, nullptr);
-                            
-                double hourly_kwh = 0.0;
+
+                double daily_kwh = 0.0;
                 if (sqlite3_step(stmt) == SQLITE_ROW) {
-                    hourly_kwh = sqlite3_column_double(stmt, 0);
+                    daily_kwh = sqlite3_column_double(stmt, 0);
                 }
                 sqlite3_finalize(stmt);
             
-                // ✅ INSERT ค่า "รายชั่วโมง" ลง DB (isread = 1)
-                const char* sqlInsert =
-                    "INSERT INTO energy_delta (timestamp, delta_kWh_hour, isread) "
-                    "VALUES (strftime('%s','now'), ?, 1);";
+                // 2. ส่งขึ้น ThingsBoard
+                JsonDocument energyDayDoc;
+                energyDayDoc.set("energy/day(kWh)", daily_kwh);
             
+                int64_t ts =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+                    
+                tb.sendTelemetry(ts, energyDayDoc);
+                    
+                // 3. บันทึกลง DB (รายวัน)
+                const char* sqlInsert =
+                    "INSERT INTO energy_delta_daily (timestamp, delta_kwh_day) "
+                    "VALUES (?, ?);";
+                    
                 sqlite3_stmt* stmtIns = nullptr;
                 sqlite3_prepare_v2(dbPM, sqlInsert, -1, &stmtIns, nullptr);
-                sqlite3_bind_double(stmtIns, 1, hourly_kwh);
+                    
+                sqlite3_bind_int64(stmtIns, 1, ts / 1000);  // เก็บเป็นวินาที
+                sqlite3_bind_double(stmtIns, 2, daily_kwh);
+                    
                 sqlite3_step(stmtIns);
                 sqlite3_finalize(stmtIns);
-            
-                std::cout << "🕐 Hourly energy saved = "
-                          << hourly_kwh << " kWh\n";
+                    
+                std::cout << "📅 Daily energy = "
+                          << daily_kwh << " kWh\n";
             }
 
+            if (newMonth) {
+                // 1. รวมค่า kWh ของ "เดือนที่แล้ว"
+                const char* sql =
+                    "SELECT SUM(delta_kwh_day) "
+                    "FROM energy_delta_daily "
+                    "WHERE strftime('%Y-%m', timestamp, 'unixepoch', 'localtime') = "
+                    "strftime('%Y-%m', 'now', '-1 month', 'localtime');";
+
+                sqlite3_stmt* stmt = nullptr;
+                sqlite3_prepare_v2(dbPM, sql, -1, &stmt, nullptr);
+
+                double monthly_kwh = 0.0;
+                if (sqlite3_step(stmt) == SQLITE_ROW) {
+                    monthly_kwh = sqlite3_column_double(stmt, 0);
+                }
+                sqlite3_finalize(stmt);
+            
+                // 2. ส่งขึ้น ThingsBoard
+                JsonDocument energyMonthDoc;
+                energyMonthDoc.set("energy/month(kWh)", monthly_kwh);
+            
+                int64_t ts =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+                    
+                tb.sendTelemetry(ts, energyMonthDoc);
+                    
+                // 3. บันทึกลง DB (รายเดือน)
+                const char* sqlInsert =
+                    "INSERT INTO energy_delta_monthly (timestamp, delta_kwh_month) "
+                    "VALUES (?, ?);";
+                    
+                sqlite3_stmt* stmtIns = nullptr;
+                sqlite3_prepare_v2(dbPM, sqlInsert, -1, &stmtIns, nullptr);
+                    
+                sqlite3_bind_int64(stmtIns, 1, ts / 1000);  // เก็บเป็นวินาที
+                sqlite3_bind_double(stmtIns, 2, monthly_kwh);
+                    
+                sqlite3_step(stmtIns);
+                sqlite3_finalize(stmtIns);
+                    
+                std::cout << "📆 Monthly energy = "
+                          << monthly_kwh << " kWh\n";
+            }
             
 
           JsonDocument doc;
