@@ -1,0 +1,82 @@
+# Project Change Log
+
+## 1. Initial Refactoring
+- Extracted monitoring logic from `main.cpp` into `include/device_102.h`.
+- Encapsulated logic in `run_device_102()` function.
+
+## 2. Device Scale-Out
+- Created `include/device_100.h` and `include/device_101.h`.
+- Updated `main.cpp` to run devices 100, 101, and 102 sequentially.
+
+## 3. Cleanup
+- Removed execution of device 100 and 101 from `main.cpp`.
+- Deleted `include/device_101.h` and `include/device_102.h`.
+- Reverted `main.cpp` to use `device_100.h` as the primary logic source.
+
+## 4. SQLite Integration
+- Modified `include/device_100.h` to include `<sqlite3.h>`.
+- Updated `CMakeLists.txt` to link `sqlite3` library.
+- Implemented `Read_iA9MEM15` function:
+  - Accepts a list of Device IDs (e.g., `{100, 101, 102}`).
+  - Creates/Opens `measurements.db`.
+  - Creates `readings` table if it doesn't exist.
+  - Deletes records older than 1 hour (cleanup).
+  - Inserts timestamped readings into the database.
+
+## 5. Renaming
+- Renamed `include/device_100.h` to `include/Read_iA9MEM15.h`.
+- Updated include guards to `READ_IA9MEM15_H`.
+- Updated `main.cpp` to include the new header.
+
+## 6. Automation (Loop)
+- Updated `main.cpp` to run in a continuous `while(true)` loop.
+- Added a 60-second sleep (`std::this_thread::sleep_for`) between polling cycles.
+
+## 7. Logic Enhancement (Historical Data - Phase 1)
+- Updated `Read_iA9MEM15.h`:
+  - Added schema updates (`ALTER TABLE`) to add columns:
+    - `total_active_power_last_1M`
+    - `total_active_power_last_5M`
+    - `total_active_power_last_30M`
+    - `total_active_power_last_1H`
+  - Implemented `get_historical_power` helper function.
+  - Updated `INSERT` statement.
+
+## 8. Configuration Management
+- Created `.gitignore` to exclude build artifacts and environment files.
+- Moved configuration (IP, Port, IDs) to `.env` file.
+- Created `include/EnvParser.h` to read `.env`.
+- Updated `main.cpp` to load configuration at runtime.
+
+## 9. Logic Enhancement (Historical Data - Phase 2)
+- Added `total_active_power_last_2H` column.
+- Extended data retention to 3 hours.
+- Implemented `safe_float` helper to handle `NaN` values (converting them to 0.0) to prevent SQL errors.
+
+## 10. Major Refactoring & Optimization
+- **Method Renaming**: Refactored `iA9MEM15` and `iPM2xxx` method names:
+  - Shortened verbose names (e.g., `Read_PartialActiveEnergy_AutoReset`).
+  - Moved detailed descriptions to comments.
+- **Simplification**:
+  - Removed `include/EnvParser.h` and explicitly removed dependency.
+  - Refactored `main.cpp` to use `std::getenv` for configuration.
+- **Database Optimization (`Read_iA9MEM15.h`)**:
+  - Renamed database file to `iA9MEM15.db`.
+  - Switched history tracking from **Total Power** to **Total Energy**.
+  - Updated Schema: Added `total_energy_last_...` columns (INTEGER).
+  - Extended data retention to **2 days**.
+  - Implemented **SQLite Prepared Statements** for performance and security.
+  - Extracted database setup logic into `SetupDatabase()`.
+- **Build System**:
+  - Fixed missing `sqlite3` dependency by downloading source amalgamation.
+  - Updated `CMakeLists.txt` to compile and link `sqlite3` locally.
+
+## 11. Scale-Out: iPM2xxx Support
+- **New Feature**: Added support for 3-Phase Monitor `iPM2xxx`.
+- **Implementation**:
+  - Created `include/Read_iPM2xxx.h` (modeled on `Read_iA9MEM15.h`).
+  - Implemented 3-phase parameter reading (Voltages, Currents, Powers, PF, Freq).
+  - Implemented **Total Energy History** tracking for `iPM2xxx`.
+  - Created `iPM2xxx.db` with schema `readings_pm2xxx`.
+- **Integration**:
+  - Updated `main.cpp` to run both `Read_iA9MEM15` and `Read_iPM2xxx` monitors sequentially.
