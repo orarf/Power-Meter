@@ -74,6 +74,16 @@ inline void SetupDatabase(sqlite3 *db) {
     std::cerr << "SQLite create table error: " << err << std::endl;
     sqlite3_free(err);
   }
+
+  // 2. Cleanup old data (> 2 days)
+  const char *sqlCleanup ="DELETE FROM readings WHERE timestamp < "
+                           "strftime('%s', 'now', '-2 days');";
+  char *errMsg = 0;
+  int rc = sqlite3_exec(db, sqlCleanup, 0, 0, &errMsg);
+  if (rc != SQLITE_OK) {
+    std::cerr << "SQL error (cleanup): " << errMsg << std::endl;
+    sqlite3_free(errMsg);
+  } 
 }
 
 /* ---------- Main Reader ---------- */

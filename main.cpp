@@ -135,6 +135,18 @@ int main(int argc, char *argv[]) {
 
                 sqlite3_step(stmtIns);
                 sqlite3_finalize(stmtIns);
+                    
+               // Sqlcleanupเก็บข้อมูลเก่า (> 1 วัน)
+                const char* sqlCleanup =
+                      "DELETE FROM energy_delta "
+                      "WHERE timestamp < strftime('%s','now','-1 day');";
+    
+                 char* err = nullptr;
+                 if (sqlite3_exec(dbPM, sqlCleanup, nullptr, nullptr, &err) != SQLITE_OK) {
+                      std::cerr << "SQLite cleanup error: " << err << std::endl;
+                      sqlite3_free(err);
+                 }
+
             }
                 if (newHour) {
                     const char* sql =
@@ -175,8 +187,15 @@ int main(int argc, char *argv[]) {
                     sqlite3_step(stmtIns);
                     sqlite3_finalize(stmtIns);
                         
-                    std::cout << "🕐 Hourly energy = "
-                              << hourly_kwh << " kWh\n";
+                    // Sqlcleanupเก็บข้อมูลเก่า (> 7 วัน)
+                    const char* sqlCleanup =
+                          "DELETE FROM energy_delta_hourly "
+                          "WHERE timestamp < strftime('%s','now','-7 days');";
+                    char* err = nullptr;
+                    if (sqlite3_exec(dbPM, sqlCleanup, nullptr, nullptr, &err) != SQLITE_OK) {
+                        std::cerr << "SQLite cleanup error: " << err << std::endl;
+                        sqlite3_free(err);
+                    }
                 }
 
                 if (newDay) {
@@ -220,8 +239,15 @@ int main(int argc, char *argv[]) {
                 sqlite3_step(stmtIns);
                 sqlite3_finalize(stmtIns);
                     
-                std::cout << "📅 Daily energy = "
-                          << daily_kwh << " kWh\n";
+                // Sqlcleanupเก็บข้อมูลเก่า (> 30 วัน)
+                const char* sqlCleanup =
+                      "DELETE FROM energy_delta_daily "
+                      "WHERE timestamp < strftime('%s','now','-30 days');";
+                char* err = nullptr;
+                if (sqlite3_exec(dbPM, sqlCleanup, nullptr, nullptr, &err) != SQLITE_OK) {
+                    std::cerr << "SQLite cleanup error: " << err << std::endl;
+                    sqlite3_free(err);
+                }
             }
 
             if (newMonth) {
@@ -265,8 +291,15 @@ int main(int argc, char *argv[]) {
                 sqlite3_step(stmtIns);
                 sqlite3_finalize(stmtIns);
                     
-                std::cout << "📆 Monthly energy = "
-                          << monthly_kwh << " kWh\n";
+                // Sqlcleanupเก็บข้อมูลเก่า (> 1 ปี)
+                const char* sqlCleanup =
+                      "DELETE FROM energy_delta_monthly "
+                      "WHERE timestamp < strftime('%s','now','-1 year');";
+                char* err = nullptr;
+                if (sqlite3_exec(dbPM, sqlCleanup, nullptr, nullptr, &err) != SQLITE_OK) {
+                    std::cerr << "SQLite cleanup error: " << err << std::endl;
+                    sqlite3_free(err); 
+                }
             }
             
 
@@ -378,3 +411,5 @@ int main(int argc, char *argv[]) {
             std::chrono::seconds(SEND_INTERVAL_SEC));
     }
 }
+        
+    
