@@ -75,3 +75,52 @@ The project includes a helper script to build and execute the application.
 - `include/iA9MEM15.h`: Modbus map for iA9MEM15.
 - `include/iPM2xxx.h`: Modbus map for iPM2xxx.
 - `build.sh`: Build automation script.
+
+# PanelServer PAS600 Modbus Monitor
+
+...existing content...
+
+## วิธีนำโปรแกรมไปรันบนเครื่องเซิร์ฟเวอร์ (24 ชั่วโมง)
+
+### 1. สร้างและติดตั้งโปรแกรมบนเซิร์ฟเวอร์
+
+ให้นำโค้ดโปรเจกต์นี้ไปไว้บนเซิร์ฟเวอร์ จากนั้นเข้าไปในโฟลเดอร์โปรเจกต์แล้วรันคำสั่ง:
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+### 2. รันโปรแกรมแบบ Background ด้วย systemd (แนะนำ)
+
+สร้างไฟล์ service สำหรับ systemd (เปลี่ยน `<TB_TOKEN>` และ path ให้ตรงกับของคุณ):
+
+เปิดเท็กซ์เอดิเตอร์ เช่น nano เพื่อสร้างไฟล์ใหม่
+sudo nano /etc/systemd/system/panelserver.service
+[Unit]
+Description=PanelServer PAS600 Modbus Monitor
+
+[Service]
+WorkingDirectory=/workspace/PanelServerPAS600
+ExecStart=/workspace/PanelServerPAS600/build/main <TB_TOKEN>
+Restart=always
+User=ubuntu
+
+[Install]
+WantedBy=multi-user.target
+```
+กด Ctrl+O เพื่อบันทึกไฟล์ แล้วกด Ctrl+X เพื่อออกจาก nano
+
+จากนั้นสั่งรันและตั้งค่าให้เริ่มอัตโนมัติ:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable panelserver
+sudo systemctl start panelserver
+sudo systemctl status panelserver
+```
+### 3. การตรวจสอบสถานะ
+
+- ถ้าใช้ systemd:  
+  ดู log ด้วยการพิมพ์คำสั่งรันใน terminal  
+  journalctl -u panelserver -f
+
+---
