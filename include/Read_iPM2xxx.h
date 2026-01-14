@@ -74,12 +74,97 @@ inline void SetupDatabasePM(sqlite3 *db) {
       "total_energy_last_2H INTEGER DEFAULT 0, "
       "total_energy_last_1D INTEGER DEFAULT 0, "
       "ActiveEnergyDeliveredIntoLoad REAL, "
+      "current_unbalanceA REAL, current_unbalanceB REAL, current_unbalanceC REAL, "
+      "current_unbalanceWorst REAL, "
+      "ActiveEnergyReceived_OutofLoad REAL, ActiveEnergyDeliveredPlussReceived REAL, ActiveEnergyDeliveredDelReceived REAL, "
+      "ReactiveEnergyDelivered REAL, ReactiveEnergyReceived REAL, ReactiveEnergyDeliveredPlussReceived REAL, ReactiveEnergyDeliveredDelReceived REAL, "
+      "ApparentEnergyDelivered REAL, ApparentEnergyReceived REAL, ApparentEnergyDeliveredPlussReceived REAL, ApparentEnergyDeliveredDelReceived REAL, "
+      "ActivePowerA REAL, ActivePowerB REAL, ActivePowerC REAL, "
+      "ReactivePowerA REAL, ReactivePowerB REAL, ReactivePowerC REAL, "
+      "ApparentPowerA REAL, ApparentPowerB REAL, ApparentPowerC REAL, "
+      "PowerFactorA REAL, PowerFactorB REAL, PowerFactorC REAL, "
+      "PowerDemandMethod INTEGER, PowerDemandIntervalDuration INTEGER, PowerDemandSubintervalDuration INTEGER, PowerDemandElapsedTimeinInterval INTEGER, PowerDemandElapsedTimeinSubinterval INTEGER, "
+      "CurrentDemandMethod INTEGER, CurrentDemandIntervalDuration INTEGER, CurrentDemandElapsedTimein INTEGER, CurrentDemandSubintervalDuration INTEGER, CurrentDemandElapsedTimeinInterval INTEGER, "
+      "VoltageAB REAL, VoltageBC REAL, VoltageCA REAL, VoltageLLAvg REAL, "
+      "VoltageUnbalanceAB REAL, VoltageUnbalanceBC REAL, VoltageUnbalanceCA REAL, VoltageUnbalanceLLWorst REAL, "
+      "VoltageUnbalanceAN REAL, VoltageUnbalanceBN REAL, VoltageUnbalanceCN REAL, VoltageUnbalanceLNWorst REAL, "
+      "DisplacementPowerFactorA REAL, DisplacementPowerFactorB REAL, DisplacementPowerFactorC REAL, DisplacementPowerFactorTotal REAL, "
+      "ActiveEnergyDeliveredIntoLoad64 INTEGER, "
+      "ActiveEnergyReceivedOutofLoad64 INTEGER, "
+      "ActiveEnergyDeliveredPlussReceived64 INTEGER, "
+      "ActiveEnergyDeliveredDelReceived64 INTEGER, "
       "is_read INTEGER DEFAULT 0"
       ");";
 
   rc = sqlite3_exec(db, sqlCreateTable, 0, 0, &errMsg);
   if (rc != SQLITE_OK) {
     std::cerr << "SQL error (create table): " << errMsg << std::endl;
+    sqlite3_free(errMsg);
+    return;
+  }
+
+  const char *sqlCreateTableDelta =
+      "CREATE TABLE IF NOT EXISTS energy_delta ("
+      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+      "timestamp INTEGER, "
+      "delta_kwh REAL"
+      ");";
+  rc = sqlite3_exec(db, sqlCreateTableDelta, 0, 0, &errMsg);
+  if (rc != SQLITE_OK) {
+    std::cerr << "SQL error (create table delta): " << errMsg << std::endl;
+    sqlite3_free(errMsg);
+    return;
+  }
+
+  const char *sqlCreateTableHourly =
+      "CREATE TABLE IF NOT EXISTS energy_delta_hourly ("
+      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+      "timestamp INTEGER, "
+      "delta_kwh_hour REAL"
+      ");";
+  rc = sqlite3_exec(db, sqlCreateTableHourly, 0, 0, &errMsg);
+  if (rc != SQLITE_OK) {
+    std::cerr << "SQL error (create table hourly): " << errMsg << std::endl;
+    sqlite3_free(errMsg);
+    return;
+  }
+
+  const char *sqlCreateTableDaily =
+      "CREATE TABLE IF NOT EXISTS energy_delta_daily ("
+      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+      "timestamp INTEGER, "
+      "delta_kwh_day REAL"
+      ");";
+  rc = sqlite3_exec(db, sqlCreateTableDaily, 0, 0, &errMsg);
+  if (rc != SQLITE_OK) {
+    std::cerr << "SQL error (create table daily): " << errMsg << std::endl;
+    sqlite3_free(errMsg);
+    return;
+  }
+
+  const char *sqlCreateTableMonthly =
+      "CREATE TABLE IF NOT EXISTS energy_delta_monthly ("
+      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+      "timestamp INTEGER, "
+      "delta_kwh_month REAL"
+      ");";
+  rc = sqlite3_exec(db, sqlCreateTableMonthly, 0, 0, &errMsg);
+  if (rc != SQLITE_OK) {
+    std::cerr << "SQL error (create table monthly): " << errMsg << std::endl;
+    sqlite3_free(errMsg);
+    return;
+  }
+
+  const char *sqlCreateTableEnergyState =
+      "CREATE TABLE IF NOT EXISTS energy_state ("
+      "id INTEGER PRIMARY KEY, "
+      "prev_wh INTEGER, "
+      "updated_at INTEGER"
+      ");";
+  rc = sqlite3_exec(db, sqlCreateTableEnergyState, 0, 0, &errMsg);
+  if (rc != SQLITE_OK) {
+    std::cerr << "SQL error (create table energy state): " << errMsg
+              << std::endl;
     sqlite3_free(errMsg);
     return;
   }
@@ -124,18 +209,18 @@ inline void Read_iPM2xxx(const std::vector<int> &ids, const std::string &ipAddr,
 
   sqlite3_stmt *stmtInsert = nullptr;
   const char *sqlInsert =
-      "INSERT INTO readings_pm2xxx (timestamp, gateway_ip, unit_id, "
+      "INSERT INTO readings_pm2xxx ("
+      "timestamp, gateway_ip, unit_id, "
       "voltage_a, voltage_b, voltage_c, voltage_avg, "
       "current_a, current_b, current_c, current_avg, "
       "active_power_total, reactive_power_total, apparent_power_total, "
       "power_factor_total, frequency, total_energy, "
-      "total_energy_last_1M, total_energy_last_5M, "
-      "total_energy_last_30M, total_energy_last_1H, "
-      "total_energy_last_2H, ActiveEnergyDeliveredIntoLoad, current_unbalanceA, current_unbalanceB, current_unbalanceC, "
-      "current_unbalanceWorst, ActiveEnergyReceived_OutofLoad, ActiveEnergyDeliveredPlussReceived, ActiveEnergyDeliveredDelReceived, "
+      "total_energy_last_1M, total_energy_last_5M, total_energy_last_30M, total_energy_last_1H, total_energy_last_2H, "
+      "ActiveEnergyDeliveredIntoLoad, current_unbalanceA, current_unbalanceB, current_unbalanceC, current_unbalanceWorst, "
+      "ActiveEnergyReceived_OutofLoad, ActiveEnergyDeliveredPlussReceived, ActiveEnergyDeliveredDelReceived, "
       "ReactiveEnergyDelivered, ReactiveEnergyReceived, ReactiveEnergyDeliveredPlussReceived, ReactiveEnergyDeliveredDelReceived, "
-      "ApparentEnergyDelivered, ApparentEnergyReceived, ApparentEnergyDeliveredPlussReceived, "
-      "ApparentEnergyDeliveredDelReceived, ActivePowerA, ActivePowerB, ActivePowerC, ReactivePowerA, ReactivePowerB, ReactivePowerC, "
+      "ApparentEnergyDelivered, ApparentEnergyReceived, ApparentEnergyDeliveredPlussReceived, ApparentEnergyDeliveredDelReceived, "
+      "ActivePowerA, ActivePowerB, ActivePowerC, ReactivePowerA, ReactivePowerB, ReactivePowerC, "
       "ApparentPowerA, ApparentPowerB, ApparentPowerC, PowerFactorA, PowerFactorB, PowerFactorC, "
       "PowerDemandMethod, PowerDemandIntervalDuration, PowerDemandSubintervalDuration, PowerDemandElapsedTimeinInterval, PowerDemandElapsedTimeinSubinterval, "
       "CurrentDemandMethod, CurrentDemandIntervalDuration, CurrentDemandElapsedTimein, CurrentDemandSubintervalDuration, CurrentDemandElapsedTimeinInterval, "
@@ -143,15 +228,27 @@ inline void Read_iPM2xxx(const std::vector<int> &ids, const std::string &ipAddr,
       "VoltageUnbalanceAB, VoltageUnbalanceBC, VoltageUnbalanceCA, VoltageUnbalanceLLWorst, "
       "VoltageUnbalanceAN, VoltageUnbalanceBN, VoltageUnbalanceCN, VoltageUnbalanceLNWorst, "
       "DisplacementPowerFactorA, DisplacementPowerFactorB, DisplacementPowerFactorC, DisplacementPowerFactorTotal, "
-      "ActiveEnergyDeliveredIntoLoad64, ActiveEnergyReceivedOutofLoad64, ActiveEnergyDeliveredPlussReceived64, ActiveEnergyDeliveredDelReceived64) VALUES "
-      "(strftime('%s', 'now'), ?, ?, "
-      "?, ?, ?, ?, "
-      "?, ?, ?, ?, "
-      "?, ?, ?, "
-      "?, ?, ?, "
-      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+      "ActiveEnergyDeliveredIntoLoad64, ActiveEnergyReceivedOutofLoad64, ActiveEnergyDeliveredPlussReceived64, ActiveEnergyDeliveredDelReceived64) "
+      "VALUES (strftime('%s', 'now'), "
+      "?, ?, " // gateway_ip, unit_id (2)
+      "?, ?, ?, ?, " // voltages (4)
+      "?, ?, ?, ?, " // currents (4)
+      "?, ?, ?, "    // powers (3)
+      "?, ?, ?, "    // pf, freq, energy (3)
+      "?, ?, ?, ?, ?, " // energy history (5)
+      "?, ?, ?, ?, ?, " // unbalance/energy1 (5)
+      "?, ?, ?, "       // active energy +/- (3)
+      "?, ?, ?, ?, "    // reactive energy (4)
+      "?, ?, ?, ?, "    // apparent energy (4)
+      "?, ?, ?, ?, ?, ?, " // active/reactive power A,B,C (6)
+      "?, ?, ?, ?, ?, ?, " // apparent/pf A,B,C (6)
+      "?, ?, ?, ?, ?, " // power demand (5)
+      "?, ?, ?, ?, ?, " // current demand (5)
+      "?, ?, ?, ?, "    // voltage LL (4)
+      "?, ?, ?, ?, "    // voltage unbalance LL (4)
+      "?, ?, ?, ?, "    // voltage unbalance LN (4)
+      "?, ?, ?, ?, "    // displacement PF (4)
+      "?, ?, ?, ?);";   // energy 64-bit (4)
 
   if (sqlite3_prepare_v2(db, sqlInsert, -1, &stmtInsert, 0) != SQLITE_OK) {
     std::cerr << "SQL Prepare Insert Error: " << sqlite3_errmsg(db)
@@ -226,9 +323,8 @@ inline void Read_iPM2xxx(const std::vector<int> &ids, const std::string &ipAddr,
       float cUnbA = client->Read_CurrentUnbalanceA();
       float cUnbB = client->Read_CurrentUnbalanceB();
       float cUnbC = client->Read_CurrentUnbalanceC();
-      float cUnbWorst = client->Read_CurrentUnbalanceWorst();
-
       float ActiveEnergyReceived_OutofLoad = client->Read_ActiveEnergyReceivedOutOfLoad();
+      float cUnbWorst = client->Read_CurrentUnbalanceWorst();
       float ActiveEnergyDeliveredPlussReceived = client->Read_ActiveEnergyDeliveredPlusReceived();
       float ActiveEnergyDeliveredDelReceived = client->Read_ActiveEnergyDeliveredReceived();
       float ReactiveEnergyDelivered = client->Read_ReactiveEnergyDelivered();

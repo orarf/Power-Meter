@@ -32,12 +32,18 @@ endif()
 # 6. Paho MQTT C (SSL)
 find_path(PAHO_MQTT_INCLUDE_DIR
     NAMES MQTTClient.h MQTTAsync.h
-    PATHS /usr/local/include /usr/include
+    PATHS
+        ${CMAKE_SOURCE_DIR}/Library/paho-mqtt/include
+        /usr/local/include
+        /usr/include
 )
 
 find_library(PAHO_MQTT_LIB
     NAMES paho-mqtt3cs paho-mqtt3c
-    PATHS /usr/local/lib /usr/lib
+    PATHS
+        ${CMAKE_SOURCE_DIR}/Library/paho-mqtt/lib
+        /usr/local/lib
+        /usr/lib
 )
 
 if(NOT PAHO_MQTT_INCLUDE_DIR OR NOT PAHO_MQTT_LIB)
